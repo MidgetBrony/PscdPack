@@ -293,6 +293,7 @@
             // 
             this.saveFileDialog.DefaultExt = "pak";
             this.saveFileDialog.Filter = "SEGA Genesis Classics ROM Pack|*.pak";
+            this.saveFileDialog.InitialDirectory = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Sega Classics\\data";
             this.saveFileDialog.OverwritePrompt = false;
             this.saveFileDialog.Title = "Open or Create ROM Pack";
             // 

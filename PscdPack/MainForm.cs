@@ -273,7 +273,7 @@ namespace PscdPack
                             var br = new BinaryReader(ms);
 
                             // Game name
-                            ms.Seek(0x120, SeekOrigin.Begin);
+                            ms.Seek(0x150, SeekOrigin.Begin);
                             nameTextBox.Text = new string(br.ReadChars(0x30)).TrimEnd(' ');
 
                             // SRAM configuration
