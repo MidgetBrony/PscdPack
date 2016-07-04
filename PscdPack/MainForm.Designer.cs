@@ -297,6 +297,10 @@
             this.saveFileDialog.OverwritePrompt = false;
             this.saveFileDialog.Title = "Open or Create ROM Pack";
             // 
+            // replaceFileDialog
+            // 
+            this.replaceFileDialog.Filter = "Bin File|*.bin|MD File|*.md|SMD File|*.smd|All Files|*.*";
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);

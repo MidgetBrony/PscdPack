@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
 using System.IO;
@@ -259,91 +260,144 @@ namespace PscdPack
                 replaceFileDialog.Title = "Replace ROM";
                 if (replaceFileDialog.ShowDialog(this) == DialogResult.OK)
                 {
-                    changed = true;
-                    byte[] rom = File.ReadAllBytes(replaceFileDialog.FileName);
-                    pak.SetImage(rom);
-                    romSizeLabel.Text = (pak.ImageSize / 1024) + " KB";
-                    dumpRomButton.Enabled = true;
+                    string filepath = replaceFileDialog.FileName;
 
-                    // Attempt to auto-load some info from ROM
-                    try
+                    //MD Conversion
+                    if (Path.GetExtension(replaceFileDialog.FileName) == ".md" || Path.GetExtension(replaceFileDialog.FileName) == ".smd")
                     {
-                        using (var ms = new MemoryStream(rom))
+                        //Use ucon64 for conversion
+                        if (File.Exists("ucon64//ucon64.exe"))
                         {
-                            var br = new BinaryReader(ms);
+                            ConvertFile(replaceFileDialog.FileName);
+                            filepath = Path.GetFileNameWithoutExtension(replaceFileDialog.FileName) + ".bin";
+                            ReplaceRom(filepath);
+                        }
 
-                            // Game name
-                            ms.Seek(0x150, SeekOrigin.Begin);
-                            nameTextBox.Text = new string(br.ReadChars(0x30)).TrimEnd(' ');
-
-                            // SRAM configuration
-                            ms.Seek(0x1b0, SeekOrigin.Begin);
-                            if (br.ReadChar() == 'R' && br.ReadChar() == 'A')
+                        else
+                        {
+                            var ucon = MessageBox.Show("ucon64 is not in the proper directory/missing. Please Download it and place in the ucon64 dir. Press yes to go to ucon64 download page.", "Feature Missing", MessageBoxButtons.YesNo, MessageBoxIcon.Error);
+                            if (ucon == DialogResult.Yes)
                             {
-                                byte x = br.ReadByte();
-                                byte y = br.ReadByte();
-                                uint ramStart = (uint)((br.ReadByte() << 24) | (br.ReadByte() << 16) | (br.ReadByte() << 8) | br.ReadByte());
-                                uint ramEnd = (uint)((br.ReadByte() << 24) | (br.ReadByte() << 16) | (br.ReadByte() << 8) | br.ReadByte());
-                                ExtraSaveMode mode = ExtraSaveMode.None;
-                                ushort ramStartPacked = (ushort)((ramStart >> 0x0c) & 0x3fff);
-                                if (y == 0x20)
-                                {
-                                    uint ramSize = ramEnd - ramStart;
-                                    mode = ExtraSaveMode.Sram;
-                                    extraPageMaskTextBox.Text = ramStartPacked.ToString("X4");
-                                    extraSizeMaskTextbox.Text = (((ramSize + 0xff) >> 8) & 0xffff).ToString("X4");
-                                }
-                                else
-                                {
-                                    // Probably EEPROM
-                                    mode = ExtraSaveMode.EepromMode1; // Give a reasonable default
-                                    extraPageMaskTextBox.Text = ramStartPacked.ToString("X4");
-                                    extraSizeMaskTextbox.Text = (256 >> 8).ToString("X4");
-                                }
-                                extraSaveModeComboBox.SelectedIndex = (int)mode;
+                                Process.Start("http://ucon64.sourceforge.net/#ucon64");
                             }
-                            else
-                            {
-                                extraSaveModeComboBox.SelectedIndex = (int)ExtraSaveMode.None;
-                            }
-
-                            // Game region
-                            ms.Seek(0x1f0, SeekOrigin.Begin);
-                            string regions = new string(br.ReadChars(0x10)).TrimEnd(' ');
-                            int rflags = 0;
-                            if (regions.Contains("U")) rflags |= 1 << 0;
-                            if (regions.Contains("J")) rflags |= 1 << 1;
-                            if (regions.Contains("E")) rflags |= 1 << 2;
-                            RomRegion renum = RomRegion.Worldwide;
-                            if (rflags != 0 && (rflags & (rflags - 1)) == 0) // Only one flag present 
-                            {
-                                switch (rflags)
-                                {
-                                    case 1 << 0:
-                                        renum = RomRegion.Usa;
-                                        break;
-                                    case 1 << 1:
-                                        renum = RomRegion.Japan;
-                                        break;
-                                    case 1 << 2:
-                                        renum = RomRegion.Europe;
-                                        break;
-                                }
-                            }
-                            regionComboBox.SelectedIndex = (int)renum;
+                            MessageBox.Show("Rom was not replaced.", "Rom Info.");
                         }
                     }
-                    catch { }
 
-                    saveButton.Enabled = true;
-                    replaceThumbButton.Enabled = true;
-                    MessageBox.Show(this, "ROM replaced.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    else if (Path.GetExtension(replaceFileDialog.FileName) == ".bin")
+                    {
+                        //Original Bin Code
+                        ReplaceRom(filepath);
+                    }
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Error replacing ROM: " + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "Error replacing ROM: " + ex.Message, Text, MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
+        }
+
+        private void ReplaceRom(string filePath)
+        {
+            changed = true;
+            byte[] rom = File.ReadAllBytes(filePath);
+            pak.SetImage(rom);
+            romSizeLabel.Text = (pak.ImageSize / 1024) + " KB";
+            dumpRomButton.Enabled = true;
+
+            // Attempt to auto-load some info from ROM
+            try
+            {
+                using (var ms = new MemoryStream(rom))
+                {
+                    var br = new BinaryReader(ms);
+
+                    // Game name
+                    ms.Seek(0x150, SeekOrigin.Begin);
+                    nameTextBox.Text = new string(br.ReadChars(0x30)).TrimEnd(' ');
+
+                    // SRAM configuration
+                    ms.Seek(0x1b0, SeekOrigin.Begin);
+                    if (br.ReadChar() == 'R' && br.ReadChar() == 'A')
+                    {
+                        byte x = br.ReadByte();
+                        byte y = br.ReadByte();
+                        uint ramStart =
+                            (uint)
+                                ((br.ReadByte() << 24) | (br.ReadByte() << 16) | (br.ReadByte() << 8) |
+                                 br.ReadByte());
+                        uint ramEnd =
+                            (uint)
+                                ((br.ReadByte() << 24) | (br.ReadByte() << 16) | (br.ReadByte() << 8) |
+                                 br.ReadByte());
+                        ExtraSaveMode mode = ExtraSaveMode.None;
+                        ushort ramStartPacked = (ushort)((ramStart >> 0x0c) & 0x3fff);
+                        if (y == 0x20)
+                        {
+                            uint ramSize = ramEnd - ramStart;
+                            mode = ExtraSaveMode.Sram;
+                            extraPageMaskTextBox.Text = ramStartPacked.ToString("X4");
+                            extraSizeMaskTextbox.Text = (((ramSize + 0xff) >> 8) & 0xffff).ToString("X4");
+                        }
+                        else
+                        {
+                            // Probably EEPROM
+                            mode = ExtraSaveMode.EepromMode1; // Give a reasonable default
+                            extraPageMaskTextBox.Text = ramStartPacked.ToString("X4");
+                            extraSizeMaskTextbox.Text = (256 >> 8).ToString("X4");
+                        }
+                        extraSaveModeComboBox.SelectedIndex = (int)mode;
+                    }
+                    else
+                    {
+                        extraSaveModeComboBox.SelectedIndex = (int)ExtraSaveMode.None;
+                    }
+
+                    // Game region
+                    ms.Seek(0x1f0, SeekOrigin.Begin);
+                    string regions = new string(br.ReadChars(0x10)).TrimEnd(' ');
+                    int rflags = 0;
+                    if (regions.Contains("U")) rflags |= 1 << 0;
+                    if (regions.Contains("J")) rflags |= 1 << 1;
+                    if (regions.Contains("E")) rflags |= 1 << 2;
+                    RomRegion renum = RomRegion.Worldwide;
+                    if (rflags != 0 && (rflags & (rflags - 1)) == 0) // Only one flag present 
+                    {
+                        switch (rflags)
+                        {
+                            case 1 << 0:
+                                renum = RomRegion.Usa;
+                                break;
+                            case 1 << 1:
+                                renum = RomRegion.Japan;
+                                break;
+                            case 1 << 2:
+                                renum = RomRegion.Europe;
+                                break;
+                        }
+                    }
+                    regionComboBox.SelectedIndex = (int)renum;
+                }
+            }
+            catch
+            {
+            }
+
+            saveButton.Enabled = true;
+            replaceThumbButton.Enabled = true;
+            MessageBox.Show(this, "ROM replaced.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+        }
+
+        private void ConvertFile(string fileName)
+        {
+            ProcessStartInfo ucon64 = new ProcessStartInfo();
+            ucon64.FileName = Application.StartupPath+"//ucon64//ucon64.exe";
+            ucon64.Arguments = "-nbak --bin -o=\""+ Application.StartupPath + "//\" \"" + fileName + "\"";
+            ucon64.WorkingDirectory = Application.StartupPath + "//ucon64//";
+            
+            Process.Start(ucon64).WaitForExit();
         }
 
         void ReplaceThumbButtonClick(object sender, EventArgs e)
